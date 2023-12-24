@@ -4,16 +4,26 @@
 #include <Windows.h>
 #include <conio.h>
 #include <stdlib.h>
+#include <string.h>
+
 
 #define ARROW_DOWN 80
 #define ARROW_UP 72
 #define ARROW_LEFT 75
 #define ARROW_RIGHT 77
-#define COUNT_OF_MAIN_MENU 7
+#define COUNT_OF_MAIN_MENU 5
 
 #define NOT_SORTED 101
 #define ASC_SORTED 102
 #define DESC_SORTED 103
+
+#define RECIPE_NUMBER_MAX 5 //레시피 최대값
+#define FOOD_NUMBER_MAX 10 //레시피 내 음식 갯수 최대값
+#define ANSI_COLOR_RED     "\x1b[31m" // 색상을 붉은색으로 변경합니다.
+#define ANSI_COLOR_RESET   "\x1b[0m" // 색상을 기본값으로 변경합니다.
+
+#define RECIPE_NUMBER_MAX 5 // 레시피 최대값
+#define FOOD_NUMBER_MAX 10 // 레시피 내 음식 갯수 최대값
 
 // 보관 물품 항목에 대한 구조체
 typedef struct {
@@ -29,12 +39,19 @@ typedef struct {
     int y;
 } _CURSOR_POS;
 
-// main menu의 cursor 위치를 저장할 변수
-_CURSOR_POS menuPosition[COUNT_OF_MAIN_MENU];
+typedef struct { // 레시피 내 음식 정보입니다.
+    char food_Name[20]; // 레시피 내 음식의 이름 
+    int food_Num; // 레시피 내 음식의 갯수
+}RECIPE_FOOD_INFO;
+
+typedef struct  { // 레시피 정보입니다.
+    char recipe_name[30]; // 레시피 이름입니다.
+    RECIPE_FOOD_INFO Food_Info[FOOD_NUMBER_MAX]; // 레시피 내 음식 정보입니다.
+}RECIPE_NAME;
 
 // main menu의 enum 상수
 enum MENU_ITEM {
-    CURRENT_STATUS, REMOVE_FOOD, NEW_FOOD, MODIFY_ITEM, READ_FROM_FILE, WRITE_TO_FILE, EXIT
+    CURRENT_STATUS, REMOVE_FOOD, NEW_FOOD, MODIFY_ITEM, EXIT
 };
 // 현재  select 된 main menu
 enum MENU_ITEM selectedMenu = CURRENT_STATUS;
@@ -83,6 +100,8 @@ int modifyReservedItem(int select); // 실제 수정 기능
 int doReadFromFile();
 int doSaveToFile();
 
+
+
 // qsort 함수(stdlib) callback에 들어갈 함수들
 int compareItemsByNameASC(const _ITEM* a, const _ITEM* b);
 int compareItemsByNameDESC(const _ITEM* a, const _ITEM* b);
@@ -98,21 +117,30 @@ time_t inputDateFromConsole(const char* message);  // time_t 구조를 입력 �
 void setTextHighlight(); // console의 글자 색을  강조색으로
 void setTextNormal(); // consoel의 글자 색을 흰색으로
 
+void draw_line1(int line_length); // 괄호 내 칸 만큼 줄을 긋고 한 줄을 띄웁니다.
+void draw_line2(int line_length); // 괄호 내 칸 만큼 이중으로 된 줄을 긋고 한 줄을 띄웁니다.
+
+int doRecipePage();//레시피 화면 구현 함수
+void displayRecipeMenu(int selected); // 메인메뉴입니다.
+
+void recipe_reset(); // 테스트용 레시피 초기화입니다.
+void recipe_input(); // 레시피 입력입니다.
+void recipe_result(); // 레시피 출력입니다.
+void save_recipe(); // 레시피 2진형식 저장입니다.
+void load_recipe(); // 레시피 2진형식 불러오기입니다.
 
 // 기본 화면에 표시할 메뉴 문자열
 const char* MENU[] = {
-    "0 >> 현재 상황 및 음식 출력\n",
-    "1 >> Remove Food\n",
-    "2 >> New Food\n",
-    "3 >> Modify Item\n",
-    "4 >> File에서 불러오기\n",
-    "5 >> File에 현상태 저장하기\n",
-    "6 >> Exit\n"
+    "1 >> 현재 상황 및 음식 출력\n",
+    "2 >> 냉장고 음식 삭제\n",
+    "3 >> 냉장고 음식 추가\n",
+    "4 >> 냉장고 음식 수정\n",
+    "5 >> 종료\n"
 };
 
 
 // 현재 냉장고 보관 물품 목록
-_ITEM* reservedItem;
+_ITEM* reservedItem=NULL;
 
 // 현재 냉장고 보관 품목 수
 //reservedItem과 항상 동기를 정확히 시켜주어야 함
@@ -122,15 +150,16 @@ int countOfItems = 0;
 int refregiratorTemperature = 5;
 int freezerTemperature = -5;
 
+RECIPE_NAME RECIPE_NUM[RECIPE_NUMBER_MAX]; // 레시피 총 집합 이름입니다.
 
 int main()
 {
-
+    if (doReadFromFile() == 0) { printf("Error !!! doReadFromFile()"); exit(1); }
     printMenu();
 
     char arrow; // arrow를 누르면 224, ARROW_DOWN, ARROW_UP 값이 순차적으로 들어 옴
 
-    // arrow key이면 selectedMenu를 바꾸고,  enter key이면  현재의 selectedMenu를 실행 시킴
+    // arrow key이면 selectedMenu를 바꾸고, 메뉴 해당 숫자나, enter key이면  현재의 selectedMenu를 실행 시킴
     while (1) {
         switch (_getch()) {
         case 224: //특수 키면 ArrowUp인지 ArrowDown인지 확인
@@ -142,7 +171,21 @@ int main()
                 if (selectedMenu > 0) selectedMenu = (enum MENU_ITEM)(selectedMenu - 1);
             }
             break;
-
+        case '1'://숫자키 입력으로 메뉴 바로가기
+            doAction(0);
+            break;
+        case '2':
+            doAction(1);
+            break;
+        case '3':
+            doAction(2);
+            break;
+        case '4':
+            doAction(3);
+            break;
+        case '5':
+            doAction(4);
+            break;
         case '\r':  // Enter key가 눌려지면 실제 행동을 한다
             doAction(selectedMenu);
         default:
@@ -156,7 +199,7 @@ int main()
 void printMenu() {
     clearConsole();
     printf("*********************************************************\n");
-    printf("커서를 선택할 메뉴로 이동한 뒤 엔터를 누르세요\n\n");
+    printf("방향키를 이용해서 커서를 선택할 메뉴로 이동한 뒤 엔터를 누르거나\n실행하고자 하는 메뉴의 숫자를 입력하세요\n\n");
     printf("*********************************************************\n");
     int countOfMenu = sizeof(MENU) / sizeof(MENU[0]);
     for (int i = 0; i < countOfMenu; i++) {
@@ -183,12 +226,6 @@ void doAction(int option) {
         break;
     case MODIFY_ITEM:
         if (doModifyItem() == 0) { printf("Error !!! doModifyItem()"); exit(1); }
-        break;
-    case READ_FROM_FILE:
-        if (doReadFromFile() == 0) { printf("Error !!! doReadFromFile()"); exit(1); }
-        break;
-    case WRITE_TO_FILE:
-        if (doSaveToFile() == 0) { printf("Error !!! doSaveToFile()"); exit(1); }
         break;
     case EXIT:
         exit(0);
@@ -225,6 +262,7 @@ void doListItems() {
         case '\r':  // Enter key가 눌려지면 실제 행동을 한다
             switch (currentSelection) {
             case RECIPE:
+                doRecipePage();
                 break;
             case REF_TEMP_UP:
                 refregiratorTemperature++;
@@ -299,10 +337,35 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     time(&currentTime_t);
 
     printf("-------------------------------------------------------------------");
-    printf("\n냉장고 관리 시스템");
-    char* strCurrentTime = getFormatedStringByTime_t(&currentTime_t);
-    printf("\n%s", strCurrentTime);
-    free(strCurrentTime);
+    printf("\n냉장고 관리 시스템\n");
+    // 현재 시간을 구조체로 변환
+    struct tm* localTime = localtime(&currentTime_t);
+
+    printf("%d-%d-%d", 1900+localTime->tm_year, 1+localTime->tm_mon, localTime->tm_mday);
+    switch (localTime->tm_wday) {
+        case(0):
+            printf("(일)\n");
+            break;
+        case(1):
+            printf("(월)\n");
+            break;
+        case(2):
+            printf("(화)\n");
+            break;
+        case(3):
+            printf("(수)\n");
+            break;
+        case(4):
+            printf("(목)\n");
+            break;
+        case(5):
+            printf("(금)\n");
+            break;
+        case(6):
+            printf("(토)\n");
+            break;
+    }
+        
 
     printf("\n-------------------------------------------------------------------");
     printf("\n유통기한 임박");
@@ -383,7 +446,7 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     for (int i = 0; i < countOfItems; i++) {
         char* start_date = getFormatedStringByTime_t(&reservedItem[i].start_date);
         char* expire_date = getFormatedStringByTime_t(&reservedItem[i].expire_date);
-        printf("%3d      %-20s  %3d개     %-20s  %-20s\n", i, reservedItem[i].name, reservedItem[i].count, start_date, expire_date);
+        printf("%3d      %-20s  %3d개     %-20s  %-20s\n", i+1, reservedItem[i].name, reservedItem[i].count, start_date, expire_date);
         free(start_date);
         free(expire_date);
     }
@@ -395,7 +458,7 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     setTextNormal();
 
     printf("\n상 하 좌 우  화살표 키로 선택할 메뉴로 이동한 뒤 엔터키를 누르세요\n");
-    printf("\n네모 세모 버튼 선택 후 엔터키를 누르면 정렬 순서를 바꿀 수 있습니다\n");
+    printf("\n네모(또는 삼각형,역삼각형) 버튼 선택 후 엔터키를 누르면 정렬 기준(ex 유통기한 오름차순 기준 정렬)을 바꿀 수 있습니다\n");
 }
 
 // 새로운 항목을 추가 해 줌 - 실제 기능은 addReservedItem() 함수가 시행
@@ -407,9 +470,9 @@ int doAddNewItem() {
     printf("보관할 새로운 정보를 입력합니다 \n\n");
     // char name[20] '\0' 를 위해 19자만 입력 가능
     printf("품목 이름 : (19자이내) >> ");
-    scanf_s("%s", newItem.name, (unsigned)_countof(newItem.name));
-    printf("품목 갯수 >> ");
-    scanf_s("%d", &newItem.count);
+    scanf("%s", newItem.name, (unsigned)_countof(newItem.name));
+    printf("품목 개수(단위는 빼고 입력하세요) >> ");
+    scanf("%d", &newItem.count);
 
     // start_time에 현재 날자 배정
     time(&newItem.start_date);
@@ -437,32 +500,22 @@ int doAddNewItem() {
     printf("\n입고 날자는 자동 저장 되지만 수정하고 싶으시면 메인 메뉴의 수정 메뉴를 이용하세요");
     printf("\n확인 하셨으면 y 키를 누르세요 >>");
     while (_getch() != 'y') {};
-
+    if (doSaveToFile() == 0) { printf("Error !!! doSaveToFile()"); exit(1); }
     return 1;
 }
 
 // 새로운 아이템을  reservedItem 에 더한다
-// tempItems에 메모리 확보후   reservedItems의 내용을 복사후  reservedItem 의 주소값을 tempItems의 주소값으로 대체
 // 실패하면 0 를 retuen
 int addReservedItem(_ITEM* item) {
     // tempItem에 현재 보다 하나 한개 더 메모리 확보
-    _ITEM* tempItems;
-    tempItems = (_ITEM*)malloc((countOfItems + 1) * sizeof(_ITEM));
+    //초기 생성 시 malloc, 추가 시 realloc
+    if (reservedItem) reservedItem = (_ITEM*)realloc(reservedItem, (countOfItems + 1) * sizeof(_ITEM));
+    else reservedItem = (_ITEM*)malloc(sizeof(_ITEM));
 
-    // tempItems에 메모리가 확보 되었으면 reservedItems를 복사하고
-    // reservedItem의  내용을 복사
-    // reservedItem으로 잡힌 memory 해제후 tempItems의 주소 복사
-    if (tempItems == 0) {
+    if (reservedItem == 0) {
         printf("Error!!! cannot allocate for memory to tempItems");
         return 0;
     }
-    else {
-        memcpy(tempItems, reservedItem, countOfItems * sizeof(_ITEM));
-        free(reservedItem);
-        reservedItem = tempItems;
-    }
-
-    // reservedItem 의 마지막에 현재 item을 붙이고 카운트 증가 시켜줌
     reservedItem[countOfItems] = *item;
     countOfItems++;
     return 1;
@@ -489,14 +542,13 @@ int doDeleteItem() {
         }
 
         printf("\n지울 아이템의  번호를 입력하세요  종료 하시려면 999 >> ");
-        if (scanf_s("%d", &select) == 0) {
+        if (scanf("%d", &select) == 0) {
             countOfTry++;
             continue;
         }
 
         if (select == 999) return 1;
-
-        if (select < 0 || select >= countOfItems) {
+        if (select <= 0 || select > countOfItems) {
             printf("잘못된 번호입니다\n");
             countOfTry++;
             continue;
@@ -510,12 +562,12 @@ int doDeleteItem() {
     while (1) {
         char answer = _getch();
         if (answer == 'y') {
-            if (removeFromReservedItem(select) == 0) exit(1);   // 실제 제거하는 함수
+            if (removeFromReservedItem(select-1) == 0) exit(1);   // 실제 제거하는 함수
             break;
         }
         else if (answer == 'n') break;
     }
-
+    if (doSaveToFile() == 0) { printf("Error !!! doSaveToFile()"); exit(1); }
     return 1;
 }
 
@@ -561,7 +613,7 @@ int removeFromReservedItem(int deleteNo) {
     }
 }
 
-// 저장된  data를 수정하는 함수, 실제 수정은 modifyReservedItem 에서 실행ㄷ됨
+// 저장된  data를 수정하는 함수, 실제 수정은 modifyReservedItem 에서 실행됨
 // data 무결성에 영향을 미치면 0를  return, 아니면 1를 return
 int doModifyItem() {
     clearConsole();
@@ -579,24 +631,26 @@ int doModifyItem() {
     while (1) {
         if (countOfTry == 3) return 0;
         printf("\n수정할 아이템의  번호를 입력하세요,  그냥 종료하려면 999>> ");
-        if (scanf_s("%d", &select) == 0) {
+        if (scanf("%d", &select) == 0) {
             countOfTry++;
             continue;
         }
         if (select == 999) return 1;
-        else if (select < 0 || select >= countOfItems) {
+        else if (select <= 0 || select > countOfItems) {
             printf("잘못된 번호입니다\n");
             countOfTry++;
             continue;
         }
         break;
     }
-
     printf("\n 수정할 항목이  [[ %d ]]  맞으면 y,  아니라면  n 을 입력 >>", select);
     while (1) {
         char answer = _getch();
         if (answer == 'y') {
-            if (modifyReservedItem(select) == 1) return 1;     // 실제 수정하는 함수를 실행
+            if (modifyReservedItem(select-1) == 1) {
+                if (doSaveToFile() == 0) { printf("Error !!! doSaveToFile()"); exit(1); }
+                return 1;
+            }// 실제 수정하는 함수를 실행
             else {
                 printf("Error!!! modifyReservedItem  실행중 error 발생");
                 return 0;
@@ -605,8 +659,6 @@ int doModifyItem() {
         else if (answer == 'n') break;
 
     }
-
-    return 1;
 }
 
 // 실제 수정하는 부분
@@ -621,7 +673,7 @@ int modifyReservedItem(int select) {
 
         printReservedItem();
 
-        printf("\n수정할 항목에 따라 단축기를 누르세요 : 품목이름-p,   갯수-c,  입고날자-s, 유통기한-e, 종료-q >> ");
+        printf("\n수정할 항목에 따라 단축기를 누르세요 : 품목이름-p,   개수(단위는 빼고 입력하세요)-c,  입고날자-s, 유통기한-e, 종료-q >> ");
         if (retry == 3) {
             printf("\nWarning!!! 3번 이상 잘 못 입력하셨습니다\n");
             _getch();
@@ -636,17 +688,17 @@ int modifyReservedItem(int select) {
         {
             char newName[20];
             printf("\n품목의 이름을   입력 하세요 19자 이하>> ");
-            scanf_s("%19s", newName, (unsigned)_countof(newName));
+            scanf("%19s", newName, (unsigned)_countof(newName));
             newName[19] = '\0'; // 19자 보다 길게 입력하면 overflow가 생기므로 대비 위해 인위적으로문자열 끝을 추가해 주었다.
-            strcpy_s(reservedItem[select].name, 20, newName);
+            strcpy(reservedItem[select].name, newName);
             retry = 0;
             break;
         }
         case 'c':
         {
             int newCount;
-            printf("\n품목의 갯수를    입력 하세요 >> ");
-            scanf_s("%d", &newCount);
+            printf("\n품목의 개수를    입력 하세요 >> ");
+            scanf("%d", &newCount);
             reservedItem[select].count = newCount;
             retry = 0;
             break;
@@ -690,7 +742,7 @@ int printReservedItem() {
     for (int i = 0; i < countOfItems; i++) {
         char* start_date = getFormatedStringByTime_t(&reservedItem[i].start_date);
         char* expire_date = getFormatedStringByTime_t(&reservedItem[i].expire_date);
-        printf("%5d  %-20s  %3d개  %-30s  %-30s\n", i, reservedItem[i].name, reservedItem[i].count, start_date, expire_date);
+        printf("%5d  %-20s  %3d개  %-30s  %-30s\n", i+1, reservedItem[i].name, reservedItem[i].count, start_date, expire_date);
         free(start_date);  //  getFormatedStringByTime_t에서 malloc으로 할당한 메모리 해제
         free(expire_date); //  getFormatedStringByTime_t에서 malloc으로 할당한 메모리 해제
     }
@@ -776,7 +828,7 @@ void setTextNormal() {
 
 
 
-// console로 부터 time_t구조를 입력 받아 검정 받은 후 return
+// console로 부터 연, 월 일을 입력받아 검증 후 해당 time_t값을  return
 // 실패하면 -1을 return
 time_t inputDateFromConsole(const char* message) {
     // 기본 tm 구조 선언
@@ -792,7 +844,7 @@ time_t inputDateFromConsole(const char* message) {
             _getch();
             return -1;
         }
-        else if (scanf_s("%d-%d-%d", &inputTime.tm_year, &inputTime.tm_mon, &inputTime.tm_mday) != 3) {
+        else if (scanf("%d-%d-%d", &inputTime.tm_year, &inputTime.tm_mon, &inputTime.tm_mday) != 3) {
             printf("\n정확한 날짜 정보를 입력하세요 e.g 2023-11-14 Error %d회\n", retry);
             retry++;
             while (getchar() != '\n'); // input buffer를 비운다
@@ -817,21 +869,9 @@ time_t inputDateFromConsole(const char* message) {
 // 파일에 _ITEM* 저장
 // 실패하면 message 보여주고 0를  return
 int doSaveToFile() {
-    clearConsole();
-    printf("---------------------------------------------\n");
-    printf("현재 상태를 파일로 저장\n");
-    printf("---------------------------------------------\n");
-
-    printf("현재 메모리 상의 데이터 입니다\n");
-    printReservedItem();
-
-    printf("\n 현재 상태를 파일로 저장합니다,   이전 저장 파일은 없어집니다  \n\n ** 파일에 쓰시려면 y 취소하려면 아무 키 입력 >>");
-    char answer = _getch();
-    if (answer != 'y') return 1;
-
     // binary 쓰기 모드
     FILE* filePointer;
-    fopen_s(&filePointer, strFileName, "wb");
+    filePointer = fopen(strFileName, "wb");
 
     if (filePointer == NULL) {
         printf("file open에 실패했습니다,  프로그램 제작자와 상의하세요,  아무 키나 누르세요");
@@ -859,8 +899,6 @@ int doSaveToFile() {
     fclose(filePointer);
 
     // 성공 메시지 표시
-    printf("\n파일에서 데이터를 저장했습니다. 아무키나 누르세요 >>");
-    _getch();
 
     return 1;
 }
@@ -869,36 +907,23 @@ int doSaveToFile() {
 // 쓸때 차지한  data를 잘 생각해서 복원
 // 실패하면 message 보여주고 0를  return
 int doReadFromFile() {
-    clearConsole();
-    printf("---------------------------------------------\n");
-    printf("파일에서 불러 오기\n");
-    printf("---------------------------------------------\n");
-
-    printf("현재 메모리 상의 데이터 입니다\n");
-    printReservedItem();
-
-    printf("\n 파일에서 냉장고 데이터를 읽어 옵니다,  현재 메모리 상의 데이터는 없어집니다  \n\n ** 읽어 오려면 y 취소하려면 아무 키 입력 >>");
-    char answer = _getch();
-    if (answer != 'y') return 1;
-
     FILE* filePointer;
+   
 
-    if (fopen_s(&filePointer, strFileName, "rb") != 0) {
-        printf("\nfile 열기에 실패했습니다, 저장된 파일이 있는지 확인해 보세요, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
-        _getch();
+    if ((filePointer = fopen(strFileName, "rb")) ==NULL) {
+        filePointer = fopen(strFileName, "wb");//음식 데이터를 저장한 파일이 없을 시 파일 만들기 후 return
+        fclose(filePointer);
         return 1;
     }
 
-    // Read the count of items from the file
+    // 항목이 몇개 저장되어있는지 읽어오기
     if (fread(&countOfItems, sizeof(int), 1, filePointer) != 1) {
         fclose(filePointer);
         printf("\nfile 읽기에 실패했습니다, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
         _getch();
         return 0;
     }
-
-    // Allocate memory for reservedItem based on the count read from the file
-    free(reservedItem);
+    //reserveditem 메모리 확보
     reservedItem = (_ITEM*)malloc(sizeof(_ITEM) * countOfItems);
     if (reservedItem == 0) {
         printf("\n memory 확보에 실패 했습니다. 프로그램 제작자와 상의하세요 아무키나 누르세요");
@@ -906,7 +931,7 @@ int doReadFromFile() {
         return 0;
     }
 
-    // Read reservedItem from the file
+    // 파일에서 데이터 읽어와서 reserveditem에 저장
     if (fread(reservedItem, sizeof(_ITEM), countOfItems, filePointer) != countOfItems) {
         fclose(filePointer);
         printf("\nfile 읽기에 실패했습니다, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
@@ -914,15 +939,17 @@ int doReadFromFile() {
         free(reservedItem);
         return 0;
     }
+    
 
     fclose(filePointer);
 
     // 성공 메시지 표시
-    printf("\n파일에서 데이터를 성공적으로 불러 왔습니다. 아무키나 누르세요 >>");
-    _getch();
+//    printf("\n파일에서 데이터를 성공적으로 불러 왔습니다. 아무키나 누르세요 >>");
+//    _getch();
 
     return 1;
 }
+
 
 int compareItemsByNameASC(const _ITEM* a, const _ITEM* b) {
     return strcmp(a->name, b->name);
@@ -946,4 +973,226 @@ int compareItemsByExpireDateASC(const _ITEM* a, const _ITEM* b) {
 
 int compareItemsByExpireDateDESC(const _ITEM* a, const _ITEM* b) {
     return (a->expire_date < b->expire_date);
+}
+
+void displayRecipeMenu(int selected) { // 메인메뉴입니다.
+    system("cls");
+    draw_line2(60); printf("\n");
+    printf("레시피 메뉴입니다.\n방향키를 통해 원하는 메뉴를 선택한 후 Enter를 눌러주세요.\n\n");
+    draw_line2(60); printf("\n");
+    printf("1. 레시피 조회 %s\n", (selected == 1) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    printf("2. 레시피 추가 %s\n", (selected == 2) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    printf("3. 레시피 수정 %s\n", (selected == 3) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    printf("4. 레시피 삭제 %s\n", (selected == 4) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    printf("5. 종료 %s\n", (selected == 5) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    printf("\n"); draw_line2(60);
+}
+
+int doRecipePage() {
+    int mainChoice = 1, return_Upper_Menu = 0;
+    char key;
+
+    while (1) {
+        displayRecipeMenu(mainChoice);
+
+        key = getch();
+
+        switch (key) {
+        case 72:  // 방향키 위
+            mainChoice = (mainChoice - 1 > 0) ? mainChoice - 1 : 5;
+            break;
+        case 80:  // 방향키 아래
+            mainChoice = (mainChoice + 1 <= 5) ? mainChoice + 1 : 1;
+            break;
+        case 13:  // Enter 키
+            switch (mainChoice) {
+            case 1: // 레시피 조회
+                system("cls");
+                draw_line2(60); printf("\n");
+                printf("레시피 조회 메뉴입니다. 현재 레시피 개수는 총 0개입니다.\n");
+                printf("자세한 레시피를 보고 싶으면 해당하는 번호를 입력해주세요.\n");
+                printf("레시피를 다 보셨다면 999를 입력해주세요.\n\n");
+                draw_line2(60); printf("\n");
+                printf("이 곳에 레시피 목록이 출력됩니다.\n\n");
+                draw_line2(60); printf("\n");
+                scanf("%d", &return_Upper_Menu);
+                recipe_result();
+
+                return 0;
+            case 2: // 레시피 추가
+                system("cls");
+                draw_line2(60); printf("\n");
+                printf("레시피 추가 메뉴입니다.\n레시피를 추가하시려면 Y, 아니라면 N을 입력해주세요.\n\n");
+                draw_line2(60); printf("\n");
+                scanf("%d", &return_Upper_Menu);
+                recipe_input(); // 테스트를 위해 레시피를 추가해야 할 경우에만 실행해주세요.
+
+                return 0;
+            case 3: // 레시피 수정
+                system("cls");
+                draw_line2(60); printf("\n");
+                printf("레시피 수정 메뉴입니다.\n수정하고 싶은 레시피 번호를 입력해주세요.\n수정을 원치 않는 경우 999를 입력해주세요.\n\n");
+                draw_line2(60); printf("\n");
+                printf("이 곳에 레시피 목록이 출력됩니다.\n\n");
+                draw_line2(60); printf("\n");
+                scanf("%d", &return_Upper_Menu);
+
+                return 0;
+            case 4: // 레시피 삭제
+                system("cls");
+                draw_line2(60); printf("\n");
+                printf("레시피 삭제 메뉴입니다.\n삭제하고 싶은 레시피 번호를 입력해주세요.\n삭제를 원치 않는 경우 999를 입력해주세요.\n\n");
+                draw_line2(60); printf("\n");
+                printf("이 곳에 레시피 목록이 출력됩니다.\n\n");
+                draw_line2(60); printf("\n");
+                scanf("%d", &return_Upper_Menu);
+                return 0;
+            case 5: // 종료
+                printf("\n프로그램을 종료합니다.\n");
+                return 0;
+            }
+            break;
+        }
+    }
+    return 0;
+}
+
+void draw_line1(int line_length)
+{
+    int i;
+    for (i = 0; i < line_length; i++)
+        printf("-");
+    printf("\n");
+}
+
+void draw_line2(int line_length)
+{
+    int i;
+    for (i = 0; i < line_length; i++)
+        printf("=");
+    printf("\n");
+}
+
+void recipe_reset() // 이를 실행하면 전체 레시피 이름은 NO_RECIPE, 음식은 NO_FOOD, 개수는 0으로 전부 초기화됩니다.
+{
+    int i, j;
+    for (i = 0; i < RECIPE_NUMBER_MAX; i++)
+    {
+        strcpy(RECIPE_NUM[i].recipe_name, "NO_RECIPE");
+        for (j = 0; j < FOOD_NUMBER_MAX; j++)
+        {
+            strcpy(RECIPE_NUM[i].Food_Info[j].food_Name, "NO_FOOD");
+            RECIPE_NUM[i].Food_Info[j].food_Num = 0;
+        }
+    }
+}
+
+void recipe_input() // 레시피를 추가하는 항목입니다.
+{
+    int i, j;
+
+    // 레시피를 추가 할 수 있는 슬롯(NO_RECIPE)이 있을 때 까지 조회합니다.
+    for (i = 0; i < RECIPE_NUMBER_MAX; i++)
+    {
+        if (strcmp(RECIPE_NUM[i].recipe_name, "NO_RECIPE") == 0)
+        {
+            break;
+        }
+    }
+
+    // 더 이상 추가할 수 있는 레시피 슬롯이 없을 경우 출력됩니다. (recipe_result를 사용하지 않을 경우에만 출력됩니다.)
+    if (i == RECIPE_NUMBER_MAX)
+    {
+        printf("더 이상 레시피를 추가 할 수 없습니다.\n");
+        return;
+    }
+
+    // 레시피를 추가 할 수 있는 슬롯이 존재하여 추가하는 작업이 진행됩니다.
+    system("cls");
+    printf("%d번째 레시피 이름을 입력해주세요.\n최대 29자까지 입력이 가능합니다.\n레시피 이름으로 999를 입력하면 레시피 추가가 중지됩니다.\n", i + 1);
+    scanf("%s", RECIPE_NUM[i].recipe_name);
+    if (strcmp(RECIPE_NUM[i].recipe_name, "999") == 0)
+    {
+        strcpy(RECIPE_NUM[i].recipe_name, "NO_RECIPE");
+        printf("레시피 추가를 중지합니다.\n");
+        return;
+    }
+
+    for (j = 0; j < FOOD_NUMBER_MAX; j++)
+    {
+        system("cls");
+        printf("%s 레시피 내 %d번째 음식 이름을 입력해주세요.\n최대 19자까지 입력이 가능합니다.\n음식 이름으로 999를 입력하면 음식 추가가 중지됩니다.\n", RECIPE_NUM[i].recipe_name, j + 1);
+        scanf("%s", RECIPE_NUM[i].Food_Info[j].food_Name);
+        if (strcmp(RECIPE_NUM[i].Food_Info[j].food_Name, "999") == 0)
+        {
+            strcpy(RECIPE_NUM[i].Food_Info[j].food_Name, "NO_FOOD");
+            printf("음식 추가를 중지합니다.\n");
+            break;
+        }
+
+        printf("%s의 개수를 입력해주세요.\n", RECIPE_NUM[i].Food_Info[j].food_Name);
+        scanf("%d", &RECIPE_NUM[i].Food_Info[j].food_Num);
+    }
+}
+
+void recipe_result() // 레시피의 현재 상태를 출력하는 항목입니다.
+{
+    int i, j;
+    system("cls");
+    printf("레시피 이름과 음식, 개수는 다음과 같습니다.\n\n");
+
+    for (int i = 0; i < RECIPE_NUMBER_MAX; i++)
+    {
+        // 레시피 이름이 NO_RECIPE라 더 이상의 레시피가 없을 경우 레시피 출력이 중단됩니다.
+        if (strcmp(RECIPE_NUM[i].recipe_name, "NO_RECIPE") == 0)
+        {
+            break;
+        }
+
+        printf("  《      %d번째 레시피      》\n", i + 1);
+        printf("[%30s]\n\n", RECIPE_NUM[i].recipe_name);
+        printf("[      음식이름      ]    [개수]\n");
+        for (int j = 0; j < FOOD_NUMBER_MAX; j++)
+        {
+            // 음식의 이름이 NO_FOOD라 더 이상 음식이 없을 경우 출력이 중단됩니다.
+            if (strcmp(RECIPE_NUM[i].Food_Info[j].food_Name, "NO_FOOD") == 0)
+            {
+                break;
+            }
+
+            printf(" %20s     %5d\n", RECIPE_NUM[i].Food_Info[j].food_Name, RECIPE_NUM[i].Food_Info[j].food_Num);
+        }
+        printf("\n");
+    }
+    printf("\n사용해주셔서 감사합니다.");
+}
+
+void save_recipe() //2진 파일 저장입니다.
+{
+    FILE* file = fopen("recipes.dat", "wb");
+
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+
+    fwrite(RECIPE_NUM, sizeof(RECIPE_NAME), RECIPE_NUMBER_MAX, file);
+
+    fclose(file);
+}
+
+void load_recipe() //2진 파일 불러오기입니다.
+{
+    FILE* file = fopen("recipes.dat", "rb");
+
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+
+    fread(RECIPE_NUM, sizeof(RECIPE_NAME), RECIPE_NUMBER_MAX, file);
+
+    fclose(file);
 }
