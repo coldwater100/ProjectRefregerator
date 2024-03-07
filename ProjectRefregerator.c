@@ -1,4 +1,12 @@
 ﻿
+/******************************************
+c프로젝트
+주제 : 냉장고 관리 시스템
+조장 : 이수찬
+조원 : 문형석, 서민우, 정하진
+제작 기간 : 2023.10.31 ~ 2023.12.26
+******************************************/
+
 #include <stdio.h>
 #include <time.h>
 #include <Windows.h>
@@ -11,15 +19,13 @@
 #define ARROW_UP 72
 #define ARROW_LEFT 75
 #define ARROW_RIGHT 77
-#define COUNT_OF_MAIN_MENU 6
+#define COUNT_OF_MAIN_MENU 8
 
 #define NOT_SORTED 101
 #define ASC_SORTED 102
 #define DESC_SORTED 103
 
-#define FOOD_NUMBER_MAX 5 //레시피 내 음식 갯수 최대값
-#define ANSI_COLOR_RED     "\x1b[31m" // 색상을 붉은색으로 변경합니다.
-#define ANSI_COLOR_RESET   "\x1b[0m" // 색상을 기본값으로 변경합니다.
+#define FOOD_NUMBER_MAX 3 //레시피 내 음식 갯수 최대값
 
 // 보관 물품 항목에 대한 구조체
 typedef struct {
@@ -44,11 +50,13 @@ typedef struct {
 typedef struct  { // 레시피 정보입니다.
     char name[30]; // 레시피 이름입니다.
     _RECIPE_ITEM food[FOOD_NUMBER_MAX]; // 레시피 내 음식 정보입니다.
+    int kind;//레시피 안의 음식 종류입니다.
+    int isAble;//레시피를 출력할거면 1, 아니면 0
 } _RECIPE;
 
 // main menu의 enum 상수
 enum MENU_ITEM {
-    CURRENT_STATUS, REMOVE_FOOD, NEW_FOOD, MODIFY_ITEM, RECIPE_MANAGE, EXIT
+    CURRENT_STATUS, REMOVE_FOOD, NEW_FOOD, MODIFY_ITEM, RECIPE_MANAGE, AVAILABLE_RECIPE, SETTING, EXIT
 };
 // 현재  select 된 main menu
 enum MENU_ITEM selectedMenu = CURRENT_STATUS;
@@ -92,8 +100,8 @@ int doAddNewItem(); // add 기초 작업
 int addReservedItem(_ITEM* item); // 실제 add 기능
 
 // 저장된 아이템을 수정하는 기능
-//int doModifyItem(); // 수정 기초 작업
-//int modifyReservedItem(int select); // 실제 수정 기능
+int doModifyItem(); // 수정 기초 작업
+int modifyReservedItem(int select); // 실제 수정 기능
 
 // 저장된 file에서 불러 오기 및 쓰기
 int doReadFromFile();
@@ -102,8 +110,8 @@ int doSaveToFile();
 
 
 // RECIPE 항목 삭제 
-//int doDeleteRecipe(); // remove 기초 작업
-//int removeFromReservedRecipe(int itemNo); // 실제 remove 기능
+int doDeleteRecipe(); // remove 기초 작업
+int removeFromReservedRecipe(int itemNo); // 실제 remove 기능
 
 void doPrintRecepi();//레시피 출력
 
@@ -113,8 +121,8 @@ int doAddNewRecipe(); // add 기초 작업
 int addReservedRecipe(_RECIPE* item); // 실제 add 기능
 
 // 저장된 레시피를 수정하는 기능
-//int doModifyRecipe(); // 수정 기초 작업
-//int modifyReservedRecipe(int select); // 실제 수정 기능
+int doModifyRecipe(); // 수정 기초 작업
+int modifyReservedRecipe(int select,int menuno); // 실제 수정 기능
 
 // 저장된 file에서 레시피 불러 오기 및 쓰기
 int doRecipeReadFromFile();
@@ -133,7 +141,8 @@ int compareItemsByExpireDateDESC(const _ITEM* a, const _ITEM* b);
 int printReservedItem();  // 현재 지정된 항목을 list하기 위한 함수
 char* getFormatedStringByTime_t(time_t* ttCurrent);  // time_t에서  날짜 스트링으로 변환 실행측에서 memory해제해야 함
 time_t inputDateFromConsole(const char* message);  // time_t 구조를 입력 받기 위한 함수
-void setTextHighlight(); // console의 글자 색을  강조색으로
+void setTextHighlight(); // 선택된 버튼의 색을  강조색으로
+void setTextBtnlight(); // 버튼색을  강조색으로
 void setTextNormal(); // consoel의 글자 색을 흰색으로
 
 void draw_line1(int line_length); // 괄호 내 칸 만큼 줄을 긋고 한 줄을 띄웁니다.
@@ -144,6 +153,10 @@ void displayRecipeMenu(int selected); // 메인메뉴입니다.
 
 void recipe_init(_RECIPE_ITEM* newRecipeItem); //레시피 전체의 음식 이름은 "", 개수는 0으로 전부 초기화됩니다.
 
+void printSetting(int selected, int isRight, int isError);
+int doSetting();
+
+int doAvailableRecipe();
 
 
 // 기본 화면에 표시할 메뉴 문자열
@@ -153,9 +166,27 @@ const char* MENU[] = {
     "3 >> 냉장고 음식 추가\n",
     "4 >> 냉장고 음식 수정\n",
     "5 >> 레시피 관리\n",
-    "6 >> 종료\n"
+    "6 >> 조리 가능한 음식 보기\n",
+    "7 >> 환경설정\n",
+    "8 >> 종료\n"
 };
 
+const char* RECIPE_MENU[] = {
+    "1. 레시피 조회 ",
+    "2. 레시피 추가 ",
+    "3. 레시피 수정 ",
+    "4. 레시피 삭제 ", 
+    "5. 이전화면으로 "  
+};
+
+const int COLORS[] = {
+    FOREGROUND_RED,
+    FOREGROUND_GREEN,
+    FOREGROUND_BLUE,
+    FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+    FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+    FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY
+};
 
 // 현재 냉장고 보관 물품 목록
 _ITEM* reservedItem=NULL;
@@ -166,6 +197,10 @@ _RECIPE* recipe = NULL;
 // 현재 냉장고 보관 품목 수
 //reservedItem과 항상 동기를 정확히 시켜주어야 함
 int countOfItems = 0;
+
+int txtColor = FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY;//버튼 색갈
+int hTxtColor = FOREGROUND_RED;//강조용 버튼 색갈
+
 
 // 현재 레시피 수
 //recipe과 항상 동기를 정확히 시켜주어야 함
@@ -212,6 +247,12 @@ int main()
             doAction(4);
             break;
         case '6':
+            doAction(5);
+            break;
+        case '7':
+            doAction(6);
+            break;
+        case '8':
             doAction(7);
             break;
         case '\r':  // Enter key가 눌려지면 실제 행동을 한다
@@ -227,11 +268,12 @@ int main()
 void printMenu() {
     clearConsole();
     printf("*********************************************************\n");
-    printf("방향키를 이용해서 커서를 선택할 메뉴로 이동한 뒤 엔터를 누르거나\n실행하고자 하는 메뉴의 숫자를 입력하세요\n\n");
+    printf("방향키를 이용해서 커서를 선택할 메뉴로 이동한 뒤 엔터를 누르거나\n실행하고자 하는 메뉴의 숫자를 입력하세요\n파일 저장과 불러오기는 자동으로 이루어집니다.\n\n");
     printf("*********************************************************\n");
     int countOfMenu = sizeof(MENU) / sizeof(MENU[0]);
     for (int i = 0; i < countOfMenu; i++) {
         if (selectedMenu == i) setTextHighlight();
+        else setTextBtnlight();
         printf("%s", MENU[i]);
         setTextNormal();
     }
@@ -257,6 +299,12 @@ void doAction(int option) {
         break;
     case RECIPE_MANAGE:
         if (doRecipePage() == 0) { printf("Error !!! doModifyItem()"); exit(1); }
+        break;
+    case AVAILABLE_RECIPE:
+        if (doAvailableRecipe() == 0) { printf("Error !!! doModifyItem()"); exit(1); }
+        break;
+    case SETTING:
+        if (doSetting() == 0) { printf("Error !!! doModifyItem()"); exit(1); }
         break;
     case EXIT:
         exit(0);
@@ -401,13 +449,15 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     printf("\n-------------------------------------------------------------------");
     printf("\n유통기한 임박");
     for (int i = 0; i < countOfItems; i++) {
-        if (reservedItem[i].expire_date < currentTime_t) printf("\n%20s 가 유통기한이 경과하였습니다", reservedItem[i].name);
-        else if (difftime(reservedItem[i].expire_date, currentTime_t) < 60 * 60 * 24) printf("\n%20s가 유통기한이 하루 이하입니다", reservedItem[i].name);
+        if (reservedItem[i].expire_date < currentTime_t) printf("\n%s의 유통기한이 경과하였습니다", reservedItem[i].name);
+        else if (difftime(reservedItem[i].expire_date, currentTime_t) < 60 * 60 * 24) printf("\n%s의 유통기한이 하루 이하입니다", reservedItem[i].name);
     }
 
     printf("\n-------------------------------------------------------------------");
-    printf("\n지금 만들 수 있는 메뉴\n");
+    printf("\n");
     if (currentSelection == RECIPE) setTextHighlight();
+    else setTextBtnlight();
+
     printf("[레시피 관리]");
     setTextNormal();
 
@@ -415,10 +465,14 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     printf("\n냉장실(%3d도)", refregiratorTemperature);
 
     if (currentSelection == REF_TEMP_UP) setTextHighlight();
+    else setTextBtnlight();
+
     printf(" [온도올리기] ");
     setTextNormal();
 
     if (currentSelection == REF_TEMP_DOWN) setTextHighlight();
+    else setTextBtnlight();
+
     printf(" [온도내리기] ");
     setTextNormal();
 
@@ -428,10 +482,14 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
     printf("\n냉동실(%3d도)", freezerTemperature);
 
     if (currentSelection == FRE_TEMP_UP) setTextHighlight();
+    else setTextBtnlight();
+
     printf(" [온도올리기] ");
     setTextNormal();
 
     if (currentSelection == FRE_TEMP_DOWN) setTextHighlight();
+    else setTextBtnlight();
+
     printf(" [온도내리기] ");
     setTextNormal();
 
@@ -444,6 +502,8 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
 
     // Sort 상태에 따라 세모, 역세모, 네모를 표시해줌
     if (currentSelection == SORT_NAME) setTextHighlight();
+    else setTextBtnlight();
+
     switch (name_sorted) {
     case NOT_SORTED:  printf("\u25A0");  break;
     case ASC_SORTED: printf("\u25B2"); break;
@@ -454,6 +514,8 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
 
     // Sort 상태에 따라 세모, 역세모, 네모를 표시해줌
     if (currentSelection == SORT_START_DATE) setTextHighlight();
+    else setTextBtnlight();
+
     switch (start_date_sorted) {
     case NOT_SORTED:  printf("\u25A0");  break;
     case ASC_SORTED: printf("\u25B2"); break;
@@ -464,6 +526,8 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
 
     // Sort 상태에 따라 세모, 역세모, 네모를 표시해줌
     if (currentSelection == SORT_EXPIRE_DATE) setTextHighlight();
+    else setTextBtnlight();
+
     switch (expire_date_sorted) {
     case NOT_SORTED:  printf("\u25A0");  break;
     case ASC_SORTED: printf("\u25B2"); break;
@@ -485,6 +549,8 @@ void printRefregiratorStatus(enum STATUS_BUTTON_MENU currentSelection) {
 
     // 이전화면으로 버튼 표시
     if (currentSelection == PREVIOUS) setTextHighlight();
+    else setTextBtnlight();
+
     printf("\n[이전화면으로]\n");
     setTextNormal();
 
@@ -499,8 +565,8 @@ int doAddNewItem() {
 
     clearConsole();
     printf("보관할 새로운 정보를 입력합니다 \n\n");
-    // char name[20] '\0' 를 위해 19자만 입력 가능
-    printf("품목 이름 : (19자이내) >> ");
+    // char name[20] '\0' 를 위해 19byte만 입력 가능
+    printf("품목 이름 : (19byte이내) >> ");
     scanf("%s", newItem.name);
     printf("품목 개수(단위는 빼고 입력하세요) >> ");
     scanf("%d", &newItem.count);
@@ -660,7 +726,7 @@ int doModifyItem() {
     int countOfTry = 0;
 
     while (1) {
-        if (countOfTry == 3) return 0;
+        if (countOfTry == 3) return 1;
         printf("\n수정할 아이템의  번호를 입력하세요,  그냥 종료하려면 999>> ");
         if (scanf("%d", &select) == 0) {
             countOfTry++;
@@ -702,7 +768,14 @@ int modifyReservedItem(int select) {
     while (1) {
         clearConsole();
 
-        printReservedItem();
+        //화면 출력
+        char* start_date = getFormatedStringByTime_t(&reservedItem[select].start_date);
+        char* expire_date = getFormatedStringByTime_t(&reservedItem[select].expire_date);
+        printf("%s  %3d개  %-30s  %-30s\n", reservedItem[select].name, reservedItem[select].count, start_date, expire_date);
+        free(start_date);  //  getFormatedStringByTime_t에서 malloc으로 할당한 메모리 해제
+        free(expire_date); //  getFormatedStringByTime_t에서 malloc으로 할당한 메모리 해제
+
+
 
         printf("\n수정할 항목에 따라 단축기를 누르세요 : 품목이름-p,   개수(단위는 빼고 입력하세요)-c,  입고날자-s, 유통기한-e, 종료-q >> ");
         if (retry == 3) {
@@ -718,9 +791,9 @@ int modifyReservedItem(int select) {
         case 'p':
         {
             char newName[20];
-            printf("\n품목의 이름을   입력 하세요 19자 이하>> ");
+            printf("\n품목의 이름을   입력 하세요 19byte 이하>> ");
             scanf("%19s", newName, (unsigned)_countof(newName));
-            newName[19] = '\0'; // 19자 보다 길게 입력하면 overflow가 생기므로 대비 위해 인위적으로문자열 끝을 추가해 주었다.
+            newName[19] = '\0'; // 19byte 보다 길게 입력하면 overflow가 생기므로 대비 위해 인위적으로문자열 끝을 추가해 주었다.
             strcpy(reservedItem[select].name, newName);
             retry = 0;
             break;
@@ -852,7 +925,12 @@ int clearConsole() {
 }
 
 void setTextHighlight() {
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), hTxtColor);
+}
+
+void setTextBtnlight() {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), txtColor);
+
 }
 
 void setTextNormal() {
@@ -1014,11 +1092,14 @@ void displayRecipeMenu(int selected) { // 메인메뉴입니다.
     draw_line2(60); printf("\n");
     printf("레시피 메뉴입니다.\n방향키를 통해 원하는 메뉴를 선택한 후 Enter를 누르거나\n실행하고자 하는 메뉴의 숫자를 입력하세요.\n\n");
     draw_line2(60); printf("\n");
-    printf("1. 레시피 조회 %s\n", (selected == 1) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
-    printf("2. 레시피 추가 %s\n", (selected == 2) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
-    printf("3. 레시피 수정 %s\n", (selected == 3) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
-    printf("4. 레시피 삭제 %s\n", (selected == 4) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
-    printf("5. 이전화면으로  %s\n", (selected == 5) ? ANSI_COLOR_RED" <-"ANSI_COLOR_RESET : "");
+    for (int i = 0; i < (sizeof(RECIPE_MENU)/ sizeof(RECIPE_MENU)[0]); i++) {
+        printf("%s ", RECIPE_MENU[i]);
+        if (selected == i+1) setTextHighlight();
+        else setTextBtnlight();
+
+        printf("<-\n");
+        setTextNormal();
+    }
     printf("\n"); draw_line2(60);
 }
 
@@ -1064,12 +1145,8 @@ int doRecipePage() {
                 doAddNewRecipe();
                 break;
 
-            case 3: // 레시피 수정 //미완성                
-                draw_line2(60); printf("\n");
-                printf("레시피 수정 메뉴입니다.\n수정하고 싶은 레시피 번호를 입력해주세요.\n수정을 원치 않는 경우 999를 입력해주세요.\n\n");
-                draw_line2(60); printf("\n");
-                printf("이 곳에 레시피 목록이 출력됩니다.\n\n");
-                draw_line2(60); printf("\n");
+            case 3: // 레시피 수정              
+                doModifyRecipe();
 
                 break;
 
@@ -1104,11 +1181,7 @@ void draw_line2(int line_length)
         printf("=");
     printf("\n");
 }
-
-
-/*
-*************************************************************************************************************
-*/
+/// ///////////////////////////////////////////////////////////////
 
 void doPrintRecepi() {
     printReservedRecipe();
@@ -1135,13 +1208,13 @@ int doAddNewRecipe() {
     clearConsole();
     printf("추가할 레시피의 이름을 입력하세요 \n");
     scanf("%s", newRecipe.name);
-    // char name[20] '\0' 를 위해 19자만 입력 가능
+    // char name[20] '\0' 를 위해 19byte만 입력 가능
 
     recipe_init(&newRecipe.food);
     char c;
     int i;
     for (i = 0;i < FOOD_NUMBER_MAX; i++) {
-        printf("%d번 재료 이름 : (19자이내) >> ",i+1);
+        printf("%d번 재료 이름 : (19byte이내) >> ",i+1);
         scanf("%s", newRecipe.food[i].name);
         printf("재료 개수(단위는 빼고 입력하세요) >> ");
         scanf("%d", &newRecipe.food[i].count);
@@ -1162,10 +1235,10 @@ int doAddNewRecipe() {
             break;
         }
     }
-    
-
-    // 실제로 data를 reservedItem 에 저장 시도
+    newRecipe.kind = i+1;//재료 종류 저장
+    // 실제로 data를 recipe 에 저장 시도
     if (addReservedRecipe(&newRecipe) == 0) { printf("Error!!! fail to add ReservedItem()"); exit(0); }
+    
 
     printf("\n확인 하셨으면 y 키를 누르세요 >>");
     while (tolower(_getch()) != 'y') {};
@@ -1173,7 +1246,7 @@ int doAddNewRecipe() {
     return 1;
 }
 
-// 새로운 아이템을  reservedItem 에 더한다
+// 새로운 아이템을  recipe 에 더한다(count는 음식의 가짓수)
 // 실패하면 0 를 retuen
 int addReservedRecipe(_RECIPE* item) {
     // tempItem에 현재 보다 하나 한개 더 메모리 확보
@@ -1251,7 +1324,7 @@ int doDeleteRecipe() {
     return 1;
 }
 
-// tempItems에 countOfItems 보다 하나 적은 메모리를 확보 후 
+// tempItems에 countOfRecipe 보다 하나 적은 메모리를 확보 후 
 // reservedItem으로 for loop 돌면서 지울 내용이 아니면 tempItems 에 복사한다
 // data 무결성에 영향을 미치면 0를  return, 아니면 1를 return
 int removeFromReservedRecipe(int deleteNo) {
@@ -1303,10 +1376,10 @@ int printReservedRecipe() {
     printf("레시피");
     printf("\n----------------------------------------------------------------------------------------------\n");
     for (int i = 0; i < countOfRecipe; i++) {
-        printf("%d번  %-15s\n", i + 1, recipe[i].name);
+        printf("%d번  %-20s\n", i + 1, recipe[i].name);
         for (int j = 0; j < FOOD_NUMBER_MAX; j++) {
             if (strcmp(recipe[i].food[j].name, "") == 0) continue;
-            else printf("%-20s  %3d개               ", recipe[i].food[j].name, recipe[i].food[j].count);
+            else printf("%-20s  %3d개           ", recipe[i].food[j].name, recipe[i].food[j].count);
         }
         printf("\n");
 
@@ -1317,10 +1390,147 @@ int printReservedRecipe() {
     return 1;
 }
 
+void printOneFoodinRecipe(int select) {
+    clearConsole();
+    printf("%-15s\n", recipe[select].name);
+    for (int i = 0; i < FOOD_NUMBER_MAX; i++) {
+        if (strcmp(recipe[select].food[i].name, "") == 0) continue;
+        else printf("%d     %-20s  %3d개 \n", i + 1, recipe[select].food[i].name, recipe[select].food[i].count);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////
 
 
 
-// 파일에 _ITEM* 저장
+// 저장된  data를 수정하는 함수, 실제 수정은 modifyReservedRecipe 에서 실행됨
+// data 무결성에 영향을 미치면 0를  return, 아니면 1를 return
+int doModifyRecipe() {
+    printReservedRecipe();
+    if (countOfRecipe == 0) {
+        printf("\n 저장된 품목이 없습니다 되돌아가시려면 아무 키나 누르세요 >>");
+        _getch();
+        return 1;
+    }
+
+    int select;
+    int countOfTry = 0;
+    int menuNo;
+
+    while (1) {
+        if (countOfTry == 3) return 0;
+        printf("\n수정할 레시피의  번호를 입력하세요,  그냥 종료하려면 999>> ");
+        if (scanf("%d", &select) == 0) {
+            countOfTry++;
+            continue;
+        }
+        if (select == 999) return 1;
+        else if (select <= 0 || select > countOfRecipe) {
+            printf("잘못된 번호입니다\n");
+            countOfTry++;
+            continue;
+        }
+        break;
+    }
+    select--;
+    //선택된 레시피만 출력
+    printOneFoodinRecipe(select);
+    countOfTry = 0;
+    while (1) {
+        if (countOfTry == 3) return 0;
+        printf("\n수정할 재료의  번호를 입력하세요,  그냥 종료하려면 999>> ");
+        if (scanf("%d", &menuNo) == 0) {
+            countOfTry++;
+            continue;
+        }
+        if (menuNo == 999) return 1;
+        else if (menuNo <= 0 || menuNo > recipe[select].kind) {
+            printf("잘못된 번호입니다\n");
+            countOfTry++;
+            continue;
+        }
+        break;
+    }
+    menuNo--;
+    printf("\n수정할 항목이  [[ %s ]]  맞으면 y,  아니라면  n 을 입력 >>", recipe[select].food[menuNo].name);
+    while (1) {
+        char answer = _getch();
+        if (answer == 'y') {
+            if (modifyReservedRecipe(select ,menuNo) == 1) {
+                if (doSaveToFile() == 0) { printf("Error !!! doSaveToFile()"); exit(1); }
+                return 1;
+            }// 실제 수정하는 함수를 실행
+            else {
+                printf("Error!!! modifyReservedItem  실행중 error 발생");
+                return 0;
+            }
+        }
+        else if (answer == 'n') break;
+
+    }
+}
+
+// 실제 수정하는 부분
+// data 무결성에 영향을 미치면 0를  return, 아니면 1를 return
+int modifyReservedRecipe(int select,int menuNo) {
+
+    int retry = 0;
+    char selectOption;
+
+    while (1) {
+        clearConsole();
+
+        printOneFoodinRecipe(select);
+
+        printf("\n%d번 재료의 수정할 항목에 따라 단축기를 누르세요 : 품목이름-p,   개수(단위는 빼고 입력하세요)-c    종료-q >> ",menuNo+1);
+        if (retry == 3) {
+            printf("\nWarning!!! 3번 이상 잘 못 입력하셨습니다\n");
+            _getch();
+            return 1;
+        }
+
+        selectOption = _getch();
+        switch (selectOption) {
+            // Enter key를 누르면 \n이 남으므로 buffer를 비움
+            while (getchar() != '\n');
+        case 'p':
+        {
+            char newName[20];
+            printf("\n품목의 이름을   입력 하세요 19byte 이하>> ");
+            scanf("%19s", newName);
+            newName[19] = '\0'; // 19byte 보다 길게 입력하면 overflow가 생기므로 대비 위해 인위적으로문자열 끝을 추가해 주었다.
+            strcpy(recipe[select].food[menuNo].name, newName);
+            retry = 0;
+            break;
+        }
+        case 'c':
+        {
+            int newCount;
+            printf("\n품목의 개수를    입력 하세요 >> ");
+            scanf("%d", &newCount);
+            recipe[select].food[menuNo].count = newCount;
+            retry = 0;
+            break;
+        }
+        case 'q':
+            return 1;
+        default:
+            retry++;
+            continue;
+        }
+    }
+
+    return 1;
+
+}
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////
+
+// 파일에 _RECIPE* 저장
 // 실패하면 message 보여주고 0를  return
 int doRecipeSaveToFile() {
     // binary 쓰기 모드
@@ -1334,7 +1544,7 @@ int doRecipeSaveToFile() {
     }
 
     // fwrite ( data에 대한 pointer, size of item, count of item, file pointer )
-    // countOfItem 을 쓴다 
+    // countOfRecipe 을 쓴다 
     if (fwrite(&countOfRecipe, sizeof(int), 1, filePointer) != 1) {
         fclose(filePointer);
         printf("file 쓰기에 실패했습니다, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
@@ -1342,7 +1552,7 @@ int doRecipeSaveToFile() {
         return 0;
     }
 
-    // reservedItem 을 쓴다, 
+    // recipe 을 쓴다, 
     if (fwrite(recipe, sizeof(_RECIPE), countOfRecipe, filePointer) != countOfRecipe) {
         fclose(filePointer);
         printf("file 쓰기에 실패했습니다, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
@@ -1365,9 +1575,6 @@ int doRecipeReadFromFile() {
 
 
     if ((filePointer = fopen(strRecipeFileName, "rb")) == NULL) {
-//        filePointer = fopen(strRecipeFileName, "wb");
-//        fwrite(&countOfRecipe, sizeof(int), 1, filePointer);//음식 데이터를 저장한 파일이 없을 시 파일 만들기 후 return //이때 countOfRecipe = 0
-//        fclose(filePointer);
         return 1;
     }
 
@@ -1378,7 +1585,7 @@ int doRecipeReadFromFile() {
         _getch();
         return 0;
     }
-    //reserveditem 메모리 확보
+    // 메모리 확보
     recipe = (_RECIPE*)malloc(sizeof(_RECIPE) * countOfRecipe);
     if (recipe == 0) {
         printf("\n memory 확보에 실패 했습니다. 프로그램 제작자와 상의하세요 아무키나 누르세요");
@@ -1386,7 +1593,7 @@ int doRecipeReadFromFile() {
         return 0;
     }
 
-    // 파일에서 데이터 읽어와서 reserveditem에 저장
+    // 파일에서 데이터 읽어와서 recipe에 저장
     if (fread(recipe, sizeof(_RECIPE), countOfRecipe, filePointer) != countOfRecipe) {
         fclose(filePointer);
         printf("\nfile 읽기에 실패했습니다, 프로그램 제작자와 상의하세요,  아무 키나 누르세요");
@@ -1403,4 +1610,132 @@ int doRecipeReadFromFile() {
 //    _getch();
 
     return 1;
+}
+
+void printSetting(int selected, int isRight, int isError) {
+    system("cls");
+    printf("환경설정\n상하좌우 방향키로 이동해서 엔터키를 누르세요\n\n");
+    setTextBtnlight();
+    printf("버튼 색깔");
+    setTextNormal();
+    setTextHighlight();
+
+    printf("       선택된 버튼의 색깔\n\n");
+    setTextNormal();
+    for (int i = 0; i < (sizeof(COLORS) / sizeof(COLORS)[0]); i++) {
+
+        SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), COLORS[i]);
+        printf("   ■ ");
+        setTextNormal(); 
+        if ((selected == i + 1) && isRight == 0) setTextHighlight();
+        else setTextBtnlight();
+        printf(" <-             ");
+
+        SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), COLORS[i]);
+        printf("■ ");
+        setTextNormal();
+        if ((selected == i + 1) && isRight == 1) setTextHighlight();
+        else setTextBtnlight();
+        printf(" <-\n");
+
+        setTextNormal();
+
+
+    }
+    if (isError == 0) printf("\n");
+    else printf("버튼의 색과 선택된 버튼의 색은 같은 색이 될 수 없습니다\n");
+    if (selected == sizeof(COLORS) / sizeof(COLORS)[0] + 1) setTextHighlight();
+    else setTextBtnlight();
+    printf("[뒤로가기]");
+    setTextNormal();   
+}
+
+int doSetting() {
+    int mainChoice = 1;
+    int isRight = 0;
+    char key;
+    int isError = 0;//하이라이트색과 그냥색이 같은지 여부
+    while (1) {
+        printSetting(mainChoice, isRight, isError);
+        key = getch();
+        switch (key) {
+        case ARROW_UP:  // 방향키 위
+            mainChoice = (mainChoice - 1 > 0) ? mainChoice - 1 : (sizeof(COLORS) / sizeof(COLORS)[0] + 1);
+            break;
+        case ARROW_DOWN:  // 방향키 아래
+            mainChoice = (mainChoice <= sizeof(COLORS) / sizeof(COLORS)[0]) ? mainChoice + 1 : 1;
+            break;
+        case ARROW_LEFT:  
+            isRight=0;
+            break;
+        case ARROW_RIGHT: 
+            isRight = 1;
+            break;
+        case '\r':
+            if (mainChoice == sizeof(COLORS) / sizeof(COLORS)[0] + 1) return 1;
+            if (isRight == 0) {
+                if (COLORS[mainChoice - 1] == hTxtColor) isError = 1;
+                else {
+                    isError = 0;
+                    txtColor = COLORS[mainChoice - 1];
+                }
+            }
+            else {
+                if (COLORS[mainChoice - 1] == txtColor) isError = 1;
+                else {
+                    isError = 0;
+                    hTxtColor = COLORS[mainChoice - 1];
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+
+int doAvailableRecipe() {
+    _RECIPE* rcp;//복사용 구조체 포인터 제작
+    rcp = (_RECIPE*)malloc(sizeof(_RECIPE) * countOfRecipe);
+    memcpy(rcp, recipe, sizeof(_RECIPE) * countOfRecipe); //구조체 덩어리 복사
+    for (int i = 0;i < countOfRecipe; i++) {
+        rcp[i].isAble = 1;
+        for (int j = 0; j < rcp[i].kind; j++) {
+            for (int k = 0;k < countOfItems;k++) {
+                if(strcmp(rcp[i].food[j].name,reservedItem[k].name)==0) rcp[i].food[j].count -= reservedItem[k].count; //같은 이름의 음식이 나오면 그 양만큼 제거(변경된 결과 양은 부족한양)
+            }
+            if (rcp[i].food[j].count > 0) rcp[i].isAble = 0;
+        }
+    }
+
+    clearConsole();
+    printf("레시피의 음식 이름과 냉장고의 음식이름이 정확히 일치해야 작동합니다\n\n*조리 가능\n\n");
+    for (int i = 0; i < countOfRecipe; i++) {
+        if(rcp[i].isAble==1) printf("%-20s\n", recipe[i].name);
+    }
+    printf("\n\n\n\n");
+    printf("*조리 불가능\n\n");
+    for (int i = 0; i < countOfRecipe; i++) {
+        if (rcp[i].isAble == 0) {
+            printf("%-20s\n", recipe[i].name);
+            for (int j = 0; j < FOOD_NUMBER_MAX; j++) {
+                if (strcmp(recipe[i].food[j].name, "") == 0) continue;
+                else if (rcp[i].food[j].count <= 0) continue;
+                else printf("%-20s  %3d개 부족      ", rcp[i].food[j].name, rcp[i].food[j].count);
+            }
+            printf("\n\n");
+        }
+        
+
+    }
+    setTextHighlight();
+    printf("[뒤로가기]");
+    setTextNormal();
+    free(rcp);
+    while (1) {   
+        switch (getch()) {
+        case '\r':
+            return 1;
+        }
+    }
+    return 0;
 }
